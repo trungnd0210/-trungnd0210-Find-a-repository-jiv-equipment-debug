@@ -27,7 +27,7 @@
             const quantityContainer = document.getElementById('quantity-container');
             const quantityInput = document.getElementById('quantity');
 
-            const correctPassword = "test";
+            const correctPassword = "1";
 
             // Function to clear previous Firebase listeners
             function clearFirebaseListeners() {
@@ -39,10 +39,12 @@
             borrowTabBtn.addEventListener('click', () => {
                 borrowTab.classList.add('active');
                 equipmentTab.classList.remove('active');
+                equipmentTab.classList.add('disabled');
             });
 
             equipmentTabBtn.addEventListener('click', () => {
                 borrowTab.classList.remove('active');
+                borrowTab.classList.add('disabled');
                 if (equipmentForm.style.display === 'block') {
                     equipmentTab.classList.add('active');
                 } else {
@@ -93,7 +95,13 @@
                 event.preventDefault();
                 const name = document.getElementById('new-equipment-name').value;
                 const quantity = document.getElementById('new-equipment-quantity').value;
-                addEquipment(name, quantity);
+                const department = document.getElementById('department').value;
+                const pic = document.getElementById('pic').value;
+                const serialNumber = document.getElementById('serial-number').value;
+                const verificationDate = document.getElementById('verification-date').value;
+                const cycle = document.getElementById('cycle').value;
+        
+                addEquipment(name, quantity, department, pic, serialNumber, verificationDate, cycle);
                 equipmentForm.reset();
             });
 
@@ -105,7 +113,7 @@
 
                         if (equipmentData.quantity > 0) {
                             // Reduce equipment quantity by 1
-                            db.ref('equipment/' + equipmentKey).update({ quantity: equipmentData.quantity - 1 });
+                            db.ref('equipment-debug/' + equipmentKey).update({ quantity: equipmentData.quantity - 1 });
 
                             // Add borrow record
                             const newBorrowRef = db.ref('debug').push();
@@ -125,10 +133,22 @@
                 });
             }
 
-            function addEquipment(name, quantity) {
+            function addEquipment(name, quantity, department, pic, serialNumber, verificationDate, cycle) {
+                const validDate = new Date(verificationDate);
+                validDate.setMonth(validDate.getMonth() + parseInt(cycle));
+        
                 const newEquipmentRef = db.ref('equipment-debug').push();
-                newEquipmentRef.set({ name, quantity }).then(() => {
-                    loadData(); // Refresh the data after updating
+                newEquipmentRef.set({
+                    name,
+                    quantity,
+                    department,
+                    pic,
+                    serialNumber,
+                    verificationDate,
+                    cycle,
+                    validDate: validDate.toISOString().split('T')[0]
+                }).then(() => {
+                    loadData();
                 }).catch((error) => {
                     console.error("Error adding equipment: ", error);
                 });
@@ -141,7 +161,7 @@
                 borrowItem.innerHTML = `
                 <div class="card-body">
                   <p class="card-text">${name} - ${equipment} ${quantity ? '(Quantity: ' + quantity + ')' : ''} (Borrowed at: ${borrowTime})</p>
-                  <button class="return" data-key="${key}">Return</button>
+                  <button class="return btn btn-outline-danger" data-key="${key}">Return</button>
                 </div>`;
 
                 borrowItem.querySelector('.return').addEventListener('click', () => {
@@ -157,7 +177,7 @@
                         snapshot.forEach((childSnapshot) => {
                             const equipmentKey = childSnapshot.key;
                             const equipmentData = childSnapshot.val();
-                            db.ref('equipment/' + equipmentKey).update({ quantity: equipmentData.quantity + 1 });
+                            db.ref('equipment-debug/' + equipmentKey).update({ quantity: equipmentData.quantity + 1 });
                         });
                     });
                 });
@@ -165,9 +185,18 @@
                 borrowList.appendChild(borrowItem);
             }
 
-            function displayEquipment(key, name, quantity) {
-                const equipmentItem = document.createElement('li');
-                equipmentItem.innerHTML = `${name} - Quantity: ${quantity}`;
+            function displayEquipment(key, name, quantity, department, pic, serialNumber, verificationDate, cycle, validDate) {
+                const equipmentItem = document.createElement('tr');
+                equipmentItem.innerHTML = `
+                    <td>${name}</td>
+                    <td>${quantity}</td>
+                    <td>${department}</td>
+                    <td>${pic}</td>
+                    <td>${serialNumber}</td>
+                    <td>${verificationDate}</td>
+                    <td>${cycle}</td>
+                    <td>${validDate}</td>
+                `;
                 equipmentList.appendChild(equipmentItem);
             }
 
@@ -188,6 +217,7 @@
 
             function addToBorrowHistory(name, equipment, borrowTime, returnTime, quantity) {
                 const historyItem = document.createElement('li');
+                historyItem.classList.add('borrow-his-li'); 
                 historyItem.innerHTML = `${name} - ${equipment} ${quantity ? '(Quantity: ' + quantity + ')' : ''} (Borrowed at: ${borrowTime}, Returned at: ${returnTime})`;
 
                 if (borrowHistory.children.length >= 15) {
@@ -217,6 +247,7 @@
                         const borrow = childSnapshot.val();
                         if (borrow.returnTime) {
                             const historyItem = document.createElement('li');
+                            historyItem.classList.add('borrow-his-li'); 
                             historyItem.innerHTML = `${borrow.name} - ${borrow.equipment} ${borrow.quantity ? '(Quantity: ' + borrow.quantity + ')' : ''} (Borrowed at: ${borrow.borrowTime}, Returned at: ${borrow.returnTime})`;
                             borrowHistory.insertBefore(historyItem, borrowHistory.firstChild);
                         }
@@ -226,8 +257,9 @@
                 db.ref('equipment-debug').on('value', (snapshot) => {
                     equipmentList.innerHTML = '';
                     snapshot.forEach((childSnapshot) => {
+                        const key = childSnapshot.key;
                         const equipment = childSnapshot.val();
-                        displayEquipment(childSnapshot.key, equipment.name, equipment.quantity);
+                        displayEquipment(key, equipment.name, equipment.quantity, equipment.department, equipment.pic, equipment.serialNumber, equipment.verificationDate, equipment.cycle, equipment.validDate);
                     });
                     updateEquipmentSelect();
                 });
